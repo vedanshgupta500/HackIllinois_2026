@@ -13,9 +13,10 @@ import { Button } from "@/components/ui/Button";
 
 interface ResultsLayoutProps {
   result: AnalysisResult;
+  image: string;
 }
 
-export function ResultsLayout({ result }: ResultsLayoutProps) {
+export function ResultsLayout({ result, image }: ResultsLayoutProps) {
   const router = useRouter();
   const colClass =
     result.people.length === 2
@@ -37,7 +38,7 @@ export function ResultsLayout({ result }: ResultsLayoutProps) {
             {/* Person cards grid */}
             <div className={`grid gap-3 ${colClass}`}>
               {result.people.map((person, i) => (
-                <SplitPersonCard key={person.label} person={person} colorIndex={i} />
+                <SplitPersonCard key={person.label} person={person} colorIndex={i} image={image} totalPeople={result.people.length} />
               ))}
             </div>
 

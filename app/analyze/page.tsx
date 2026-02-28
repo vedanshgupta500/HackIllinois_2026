@@ -7,12 +7,16 @@ import { ResultsLayout } from "@/components/results/ResultsLayout";
 
 export default function AnalyzePage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [image, setImage] = useState<string>("");
   const router = useRouter();
 
   useEffect(() => {
     const stored = sessionStorage.getItem("analysis_result");
     if (!stored) { router.replace("/"); return; }
-    try { setResult(JSON.parse(stored)); }
+    try {
+      setResult(JSON.parse(stored));
+      setImage(sessionStorage.getItem("analysis_image") ?? "");
+    }
     catch { router.replace("/"); }
   }, [router]);
 
@@ -24,5 +28,5 @@ export default function AnalyzePage() {
     );
   }
 
-  return <ResultsLayout result={result} />;
+  return <ResultsLayout result={result} image={image} />;
 }

@@ -14,12 +14,18 @@ const SIGNALS = [
 interface PersonCardProps {
   person: PersonAnalysis;
   colorIndex: number;
+  image: string;
+  totalPeople: number;
 }
 
-export function SplitPersonCard({ person, colorIndex }: PersonCardProps) {
+export function SplitPersonCard({ person, colorIndex, image, totalPeople }: PersonCardProps) {
   const [ready, setReady] = useState(false);
   const colors = PERSON_COLORS[colorIndex % PERSON_COLORS.length];
   const isWinner = person.rank === 1;
+
+  // Derive horizontal crop position from person number (labeled left-to-right)
+  const personNum = parseInt(person.label.replace(/\D/g, ""), 10) || (colorIndex + 1);
+  const xPercent = totalPeople > 1 ? ((personNum - 1) / (totalPeople - 1)) * 100 : 50;
 
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 80);
@@ -40,16 +46,24 @@ export function SplitPersonCard({ person, colorIndex }: PersonCardProps) {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-4 pt-1">
-        <div>
-          <p className="text-zinc-500 text-xs">{person.position}</p>
-          <p className="text-zinc-100 text-sm font-semibold mt-0.5">{person.label}</p>
-        </div>
-        <div className="text-right">
-          <p className={cn("text-2xl font-semibold tabular-nums", colors.text)}>
+      <div className="flex flex-col items-center gap-2 mb-4 pt-1">
+        {image && (
+          <div className={cn("w-14 h-14 rounded-full overflow-hidden border-2 flex-shrink-0", colors.border)}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt={person.label}
+              className="w-full h-full object-cover"
+              style={{ objectPosition: `${xPercent}% 20%` }}
+            />
+          </div>
+        )}
+        <div className="text-center">
+          <p className="text-zinc-100 text-sm font-semibold">{person.label}</p>
+          <p className={cn("text-xl font-semibold tabular-nums", colors.text)}>
             {person.composite_score}
+            <span className="text-zinc-600 text-xs font-normal ml-0.5">/100</span>
           </p>
-          <p className="text-zinc-700 text-xs">/100</p>
         </div>
       </div>
 

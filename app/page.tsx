@@ -25,9 +25,10 @@ export default function UploadPage() {
   useEffect(() => {
     if (state.status === "success") {
       sessionStorage.setItem("analysis_result", JSON.stringify(state.data));
+      if (preview) sessionStorage.setItem("analysis_image", preview);
       router.push("/analyze");
     }
-  }, [state, router]);
+  }, [state, router, preview]);
 
   if (state.status === "processing" || state.status === "uploading") {
     return <ProcessingScreen preview={preview} />;
