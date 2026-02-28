@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MogGPT | HackIllinois 2026</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>MogGPT</h1>
+      <p class="subtitle">Find out if someone got <strong>framemogged</strong> from core features.</p>
+
+      <form id="moggpt-form" class="card">
+        <label>Jawline <input type="range" name="jawline" min="0" max="10" value="5" /></label>
+        <label>Facial Symmetry <input type="range" name="facial_symmetry" min="0" max="10" value="5" /></label>
+        <label>Posture <input type="range" name="posture" min="0" max="10" value="5" /></label>
+        <label>Shoulder Width <input type="range" name="shoulder_width" min="0" max="10" value="5" /></label>
+        <label>Confidence / Presence <input type="range" name="confidence" min="0" max="10" value="5" /></label>
+        <button type="submit">Analyze Frame</button>
+      </form>
+
+      <section id="result" class="card hidden" aria-live="polite"></section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
