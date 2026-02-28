@@ -5,14 +5,13 @@ import {
   SYSTEM_PROMPT,
   DISCLAIMER,
   recalculateScore,
+  type PersonSignals,
 } from "@/lib/analyze";
-import type { AnalyzeRequest, AnalysisResult } from "@/types/analysis";
+import type { AnalyzeRequest, AnalysisResult, PersonAnalysis } from "@/types/analysis";
+import { incrementScanCount } from "@/lib/scanCounter";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
-// 5MB base64 → ~3.75MB raw image
 const MAX_BASE64_LENGTH = 5 * 1024 * 1024 * 1.37;
 
 export async function POST(req: NextRequest) {
@@ -41,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -49,16 +48,9 @@ export async function POST(req: NextRequest) {
           content: [
             {
               type: "image",
-              source: {
-                type: "base64",
-                media_type: body.mimeType,
-                data: base64Data,
-              },
+              source: { type: "base64", media_type: body.mimeType, data: base64Data },
             },
-            {
-              type: "text",
-              text: buildUserPrompt(),
-            },
+            { type: "text", text: buildUserPrompt() },
           ],
         },
       ],
@@ -72,7 +64,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Strip markdown fences Claude occasionally adds despite instructions
     const cleaned = textContent.text
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
@@ -90,10 +81,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Handle Claude-reported edge cases
     if (parsed.error) {
       const codeMap: Record<string, string> = {
-        NOT_TWO_PEOPLE: "NOT_TWO_PEOPLE",
+        NO_PEOPLE: "NO_PEOPLE",
+        TOO_MANY_PEOPLE: "TOO_MANY_PEOPLE",
         POOR_QUALITY: "POOR_QUALITY",
       };
       return NextResponse.json(
@@ -106,52 +97,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate structure
-    const pa = parsed.person_a as Record<string, unknown>;
-    const pb = parsed.person_b as Record<string, unknown>;
-    if (!pa?.signals || !pb?.signals) {
+    const rawPeople = parsed.people as Array<Record<string, unknown>>;
+    if (!Array.isArray(rawPeople) || rawPeople.length < 2) {
       return NextResponse.json(
         { success: false, error: "Unexpected AI response format", code: "AI_ERROR" },
         { status: 502 }
       );
     }
 
-    // Server-side score recalculation — never trust Claude's arithmetic
-    const paSignals = pa.signals as { spatial_presence: number; posture_dominance: number; facial_intensity: number; attention_capture: number };
-    const pbSignals = pb.signals as { spatial_presence: number; posture_dominance: number; facial_intensity: number; attention_capture: number };
+    const people: PersonAnalysis[] = rawPeople.map((p, i) => {
+      const signals = p.signals as PersonSignals;
+      return {
+        label: (p.label as string) || `Person ${i + 1}`,
+        position: (p.position as string) || "unknown",
+        signals,
+        composite_score: recalculateScore(signals),
+        rank: 0,
+      };
+    });
 
-    const scoreA = recalculateScore(paSignals);
-    const scoreB = recalculateScore(pbSignals);
-    const margin = Math.round(Math.abs(scoreA - scoreB) * 10) / 10;
+    people.sort((a, b) => b.composite_score - a.composite_score);
+    people.forEach((p, i) => { p.rank = i + 1; });
 
-    // Server-side winner determination (ignore Claude's winner field)
-    const winner: "person_a" | "person_b" | "tie" =
-      margin < 3 ? "tie" : scoreA > scoreB ? "person_a" : "person_b";
+    const is_tie =
+      people.length >= 2 &&
+      Math.abs(people[0].composite_score - people[1].composite_score) < 3;
 
     const result: AnalysisResult = {
-      person_a: {
-        label: "Person A",
-        position: (pa.position as "left" | "right" | "center") ?? "left",
-        signals: paSignals,
-        composite_score: scoreA,
-      },
-      person_b: {
-        label: "Person B",
-        position: (pb.position as "left" | "right" | "center") ?? "right",
-        signals: pbSignals,
-        composite_score: scoreB,
-      },
-      winner,
-      confidence: typeof parsed.confidence === "number" ? Math.min(100, Math.max(0, parsed.confidence)) : 70,
-      margin,
+      people,
+      winner_index: 0,
+      is_tie,
       explanation: (parsed.explanation as string) ?? "",
-      disclaimer: DISCLAIMER, // always overwrite with our canonical string
+      disclaimer: DISCLAIMER,
       processing_time_ms: Date.now() - startTime,
     };
 
+    incrementScanCount();
+
     return NextResponse.json({ success: true, data: result });
   } catch (error: unknown) {
-    const err = error as { status?: number; message?: string };
+    const err = error as { status?: number };
     if (err?.status === 429) {
       return NextResponse.json(
         { success: false, error: "Rate limit reached. Try again in a moment.", code: "RATE_LIMIT" },

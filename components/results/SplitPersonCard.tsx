@@ -2,121 +2,77 @@
 
 import { useEffect, useState } from "react";
 import type { PersonAnalysis } from "@/types/analysis";
+import { PERSON_COLORS, cn } from "@/lib/utils";
 
 const SIGNALS = [
-  { key: "spatial_presence" as const, label: "Spatial Presence" },
-  { key: "posture_dominance" as const, label: "Posture" },
-  { key: "facial_intensity" as const, label: "Facial Intensity" },
-  { key: "attention_capture" as const, label: "Attention Capture" },
+  { key: "spatial_presence"  as const, label: "Spatial"   },
+  { key: "posture_dominance" as const, label: "Posture"   },
+  { key: "facial_intensity"  as const, label: "Facial"    },
+  { key: "attention_capture" as const, label: "Attention" },
 ];
 
-interface SplitPersonCardProps {
+interface PersonCardProps {
   person: PersonAnalysis;
-  isWinner: boolean;
-  colorScheme: "violet" | "amber";
+  colorIndex: number;
 }
 
-export function SplitPersonCard({ person, isWinner, colorScheme }: SplitPersonCardProps) {
-  const [animated, setAnimated] = useState(false);
+export function SplitPersonCard({ person, colorIndex }: PersonCardProps) {
+  const [ready, setReady] = useState(false);
+  const colors = PERSON_COLORS[colorIndex % PERSON_COLORS.length];
+  const isWinner = person.rank === 1;
 
   useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 100);
+    const t = setTimeout(() => setReady(true), 80);
     return () => clearTimeout(t);
   }, []);
 
-  const accentColor = colorScheme === "violet" ? "violet" : "amber";
-  const barColor =
-    colorScheme === "violet" ? "bg-violet-500" : "bg-amber-500";
-  const ringColor =
-    colorScheme === "violet"
-      ? "ring-violet-500 shadow-violet-500/20"
-      : "ring-amber-500 shadow-amber-500/20";
-  const scoreColor =
-    colorScheme === "violet" ? "text-violet-400" : "text-amber-400";
-  const badgeBg =
-    colorScheme === "violet"
-      ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
-      : "bg-amber-500/20 border-amber-500/40 text-amber-300";
-
   return (
     <div
-      className={`
-        relative flex-1 min-w-0 bg-zinc-900 rounded-2xl p-5 transition-all duration-300
-        ${isWinner ? `ring-2 ${ringColor} shadow-lg` : "opacity-80"}
-      `}
-      style={
-        isWinner
-          ? {
-              animation: "pulse-ring 2s ease-in-out infinite",
-            }
-          : undefined
-      }
+      className={cn(
+        "card p-4 relative transition-all duration-200",
+        isWinner && "border-violet-800/60 shadow-sm shadow-violet-950"
+      )}
     >
-      {/* Winner badge */}
       {isWinner && (
-        <div
-          className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full border text-xs font-bold uppercase tracking-wider ${badgeBg}`}
-        >
-          Dominant
-        </div>
+        <span className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full bg-violet-950 border border-violet-800 text-violet-300 text-[10px] font-medium uppercase tracking-wider">
+          #1 · Dominant
+        </span>
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-4 pt-1">
         <div>
-          <p className="text-zinc-400 text-xs uppercase tracking-widest font-medium">
-            {person.position === "left"
-              ? "Left · "
-              : person.position === "right"
-              ? "Right · "
-              : "Center · "}
-            {person.label}
-          </p>
-          <p className={`text-3xl font-black mt-0.5 ${scoreColor}`}>
+          <p className="text-zinc-500 text-xs">{person.position}</p>
+          <p className="text-zinc-100 text-sm font-semibold mt-0.5">{person.label}</p>
+        </div>
+        <div className="text-right">
+          <p className={cn("text-2xl font-semibold tabular-nums", colors.text)}>
             {person.composite_score}
           </p>
-          <p className="text-zinc-600 text-xs">/100 composite</p>
-        </div>
-        <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black ${
-            colorScheme === "violet"
-              ? "bg-violet-500/20 text-violet-300"
-              : "bg-amber-500/20 text-amber-300"
-          }`}
-        >
-          {person.label === "Person A" ? "A" : "B"}
+          <p className="text-zinc-700 text-xs">/100</p>
         </div>
       </div>
 
       {/* Signal bars */}
-      <div className="space-y-3">
-        {SIGNALS.map((signal) => {
-          const value = person.signals[signal.key];
+      <div className="space-y-2.5">
+        {SIGNALS.map((s) => {
+          const val = person.signals[s.key];
           return (
-            <div key={signal.key}>
+            <div key={s.key}>
               <div className="flex justify-between mb-1">
-                <span className="text-zinc-400 text-xs">{signal.label}</span>
-                <span className={`text-xs font-semibold ${scoreColor}`}>
-                  {value}
-                </span>
+                <span className="text-zinc-500 text-xs">{s.label}</span>
+                <span className={cn("text-xs font-medium tabular-nums", colors.text)}>{val}</span>
               </div>
-              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${barColor} rounded-full signal-bar`}
-                  style={{ width: animated ? `${value}%` : "0%" }}
+                  className={cn("h-full rounded-full signal-bar", colors.bar)}
+                  style={{ width: ready ? `${val}%` : "0%" }}
                 />
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* Accent line bottom */}
-      <div
-        className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full opacity-40 ${
-          colorScheme === "violet" ? "bg-violet-500" : "bg-amber-500"
-        }`}
-      />
     </div>
   );
 }
