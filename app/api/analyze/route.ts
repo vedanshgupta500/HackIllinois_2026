@@ -38,9 +38,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Gemini Flash: free tier, vision support, forces JSON output
+    // gemini-1.5-flash: confirmed free tier, no billing required, vision support
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-1.5-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         responseMimeType: "application/json",
@@ -130,8 +130,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, data: analysisResult });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string };
-    // Gemini rate limit / quota exceeded
-    if (err?.status === 429 || err?.message?.includes("quota")) {
+    const msg = err?.message ?? "";
+    // Gemini surfaces rate limits / quota as RESOURCE_EXHAUSTED or 429
+    const isRateLimit =
+      err?.status === 429 ||
+      msg.includes("429") ||
+      msg.includes("quota") ||
+      msg.includes("RESOURCE_EXHAUSTED") ||
+      msg.includes("rate limit");
+    if (isRateLimit) {
       return NextResponse.json(
         { success: false, error: "Rate limit reached. Try again in a moment.", code: "RATE_LIMIT" },
         { status: 429 }
