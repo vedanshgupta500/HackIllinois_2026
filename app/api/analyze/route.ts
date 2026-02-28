@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildUserPrompt,
@@ -10,7 +10,7 @@ import {
 import type { AnalyzeRequest, AnalysisResult, PersonAnalysis } from "@/types/analysis";
 import { incrementScanCount } from "@/lib/scanCounter";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
 const MAX_BASE64_LENGTH = 5 * 1024 * 1024 * 1.37;
 
@@ -38,49 +38,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: body.mimeType, data: base64Data },
-            },
-            { type: "text", text: buildUserPrompt() },
-          ],
-        },
-      ],
+    // Gemini Flash: free tier, vision support, forces JSON output
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: SYSTEM_PROMPT,
+      generationConfig: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 2048,
+        temperature: 0.2,
+      },
     });
 
-    const textContent = message.content.find((c) => c.type === "text");
-    if (!textContent || textContent.type !== "text") {
-      return NextResponse.json(
-        { success: false, error: "No response from AI", code: "AI_ERROR" },
-        { status: 502 }
-      );
-    }
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: body.mimeType,
+        },
+      },
+      buildUserPrompt(),
+    ]);
 
-    const cleaned = textContent.text
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/g, "")
-      .trim();
+    const rawText = result.response.text();
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(cleaned);
+      parsed = JSON.parse(rawText);
     } catch {
-      console.error("[/api/analyze] JSON parse failed:", textContent.text);
+      console.error("[/api/analyze] JSON parse failed:", rawText);
       return NextResponse.json(
         { success: false, error: "Failed to parse AI response", code: "AI_ERROR" },
         { status: 502 }
       );
     }
 
+    // Handle model-reported edge cases
     if (parsed.error) {
       const codeMap: Record<string, string> = {
         NO_PEOPLE: "NO_PEOPLE",
@@ -105,6 +97,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Server-side score recalculation — never trust model arithmetic
     const people: PersonAnalysis[] = rawPeople.map((p, i) => {
       const signals = p.signals as PersonSignals;
       return {
@@ -123,7 +116,7 @@ export async function POST(req: NextRequest) {
       people.length >= 2 &&
       Math.abs(people[0].composite_score - people[1].composite_score) < 3;
 
-    const result: AnalysisResult = {
+    const analysisResult: AnalysisResult = {
       people,
       winner_index: 0,
       is_tie,
@@ -134,10 +127,11 @@ export async function POST(req: NextRequest) {
 
     incrementScanCount();
 
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ success: true, data: analysisResult });
   } catch (error: unknown) {
-    const err = error as { status?: number };
-    if (err?.status === 429) {
+    const err = error as { status?: number; message?: string };
+    // Gemini rate limit / quota exceeded
+    if (err?.status === 429 || err?.message?.includes("quota")) {
       return NextResponse.json(
         { success: false, error: "Rate limit reached. Try again in a moment.", code: "RATE_LIMIT" },
         { status: 429 }
