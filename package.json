@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@anthropic-ai/sdk": "^0.78.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "html2canvas": "^1.4.1",
