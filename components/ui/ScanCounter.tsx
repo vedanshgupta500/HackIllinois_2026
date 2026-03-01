@@ -16,8 +16,8 @@ export function ScanCounter() {
   if (count === null) return null;
 
   return (
-    <p className="text-zinc-600 text-sm tabular-nums">
-      <span className="text-zinc-400 font-medium">{formatNumber(count)}</span>
+    <p className="text-gray-400 text-sm tabular-nums">
+      <span className="text-gray-600 font-medium">{formatNumber(count)}</span>
       {" "}frames analyzed
     </p>
   );

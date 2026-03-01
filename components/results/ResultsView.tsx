@@ -71,46 +71,33 @@ export function ResultsView({
     <>
       <Navbar onUploadNew={onReset} />
 
-      <main className="pb-16 relative overflow-hidden min-h-screen">
-        {/* Background */}
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-violet-600/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-40 right-1/4 w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="container max-w-3xl py-6 relative z-10 space-y-6">
+      <main className="pb-16 min-h-screen">
+        <div className="container max-w-3xl py-8 space-y-6">
           {/* ── Winner banner ── */}
-          <section className="text-center pt-6 pb-2 animate-scale-in">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest mb-3">
+          <section className="text-center pt-4 pb-2 animate-scale-in">
+            <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-4">
               {isTie ? "Analysis Complete" : "Dominates the Frame"}
             </p>
 
             {!isTie && winner && (
               <>
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <Trophy
-                    size={22}
-                    className="text-violet-400 animate-float"
-                  />
-                  <h2 className="text-zinc-50 text-4xl sm:text-5xl font-bold tracking-tight text-gradient">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Trophy size={20} className="text-blue-600" />
+                  <h2 className="text-gray-900 text-4xl sm:text-5xl font-bold tracking-tight">
                     {names[winner.faceId] || "Winner"}
                   </h2>
-                  <Trophy
-                    size={22}
-                    className="text-violet-400 animate-float"
-                    style={{ animationDelay: "0.5s" }}
-                  />
                 </div>
                 <div className="flex items-baseline justify-center gap-2">
-                  <span className="text-4xl font-bold text-gradient tabular-nums">
+                  <span className="text-4xl font-bold text-blue-600 tabular-nums">
                     {winner.totalScore}
                   </span>
-                  <span className="text-zinc-600 text-lg">/100</span>
+                  <span className="text-gray-400 text-lg">/100</span>
                 </div>
                 {runnerUp && (
                   <div className="mt-3">
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-violet-950/50 border border-violet-800/30 text-violet-300 text-xs font-medium">
-                      <Sparkles size={10} />+
-                      {(winner.totalScore - runnerUp.totalScore).toFixed(1)}{" "}
-                      ahead of {names[runnerUp.faceId] || "Runner-up"}
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-medium">
+                      <Sparkles size={10} />
+                      +{(winner.totalScore - runnerUp.totalScore).toFixed(1)} ahead of {names[runnerUp.faceId] || "Runner-up"}
                     </span>
                   </div>
                 )}
@@ -119,10 +106,10 @@ export function ResultsView({
 
             {isTie && (
               <>
-                <h2 className="text-zinc-50 text-4xl sm:text-5xl font-bold tracking-tight mb-2">
-                  Perfect Balance
+                <h2 className="text-gray-900 text-4xl sm:text-5xl font-bold tracking-tight mb-2">
+                  Tied
                 </h2>
-                <p className="text-zinc-500 text-sm mt-2">
+                <p className="text-gray-500 text-sm mt-2">
                   Both subjects command equal visual presence
                 </p>
               </>
@@ -132,11 +119,11 @@ export function ResultsView({
           {/* ── Face strip ── */}
           <section className="card p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
+              <p className="text-gray-500 text-xs font-medium uppercase tracking-widest">
                 Detected Faces
               </p>
               {persons.length > 2 && (
-                <p className="text-zinc-600 text-[10px]">
+                <p className="text-gray-400 text-[10px]">
                   Tap to compare any two
                 </p>
               )}
@@ -196,15 +183,15 @@ export function ResultsView({
           {explanation && (
             <div className="card p-5 space-y-4">
               <div>
-                <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest mb-2">
+                <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-2">
                   Analysis
                 </p>
-                <p className="text-zinc-300 text-sm leading-relaxed">
+                <p className="text-gray-700 text-sm leading-relaxed">
                   {explanation}
                 </p>
               </div>
-              <div className="border-t border-zinc-800 pt-4">
-                <p className="text-zinc-700 text-xs leading-relaxed">
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-gray-400 text-xs leading-relaxed">
                   {disclaimer}
                 </p>
               </div>
@@ -215,13 +202,13 @@ export function ResultsView({
           <div className="flex items-center justify-between pt-2">
             <button
               onClick={onReset}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
             >
               <RotateCcw size={14} />
               Analyze another
             </button>
             <button
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 text-zinc-300 text-sm border border-zinc-700 hover:bg-zinc-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-gray-600 text-sm border border-gray-200 hover:bg-gray-50 transition-colors"
               title="Coming soon"
             >
               <Download size={14} />
@@ -230,7 +217,7 @@ export function ResultsView({
           </div>
 
           {processingTime && (
-            <p className="text-zinc-700 text-xs text-center tabular-nums">
+            <p className="text-gray-400 text-xs text-center tabular-nums">
               Analyzed in {(processingTime / 1000).toFixed(1)}s
             </p>
           )}

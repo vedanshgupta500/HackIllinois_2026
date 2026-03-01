@@ -12,12 +12,12 @@ import {
 import type { PersonSignals } from "@/types/analysis";
 
 const RADAR_COLORS = [
-  "#8b5cf6",
-  "#f59e0b",
-  "#10b981",
-  "#f43f5e",
-  "#0ea5e9",
-  "#f97316",
+  "#2563EB",
+  "#64748B",
+  "#059669",
+  "#EA580C",
+  "#6366F1",
+  "#E11D48",
 ];
 
 interface SignalEntry {
@@ -59,23 +59,24 @@ export function SignalBreakdown({ entries }: SignalBreakdownProps) {
 
   return (
     <div className="card p-5">
-      <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest mb-4">
+      <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-4">
         Signal Breakdown
       </p>
       <ResponsiveContainer width="100%" height={280}>
         <RadarChart data={data} cx="50%" cy="50%" outerRadius="72%">
-          <PolarGrid stroke="#1f1f1f" />
+          <PolarGrid stroke="#E5E7EB" />
           <PolarAngleAxis
             dataKey="axis"
-            tick={{ fill: "#52525b", fontSize: 11, fontWeight: 500 }}
+            tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
           />
           <Tooltip
             contentStyle={{
-              background: "#111",
-              border: "1px solid #1f1f1f",
+              background: "#FFFFFF",
+              border: "1px solid #E5E7EB",
               borderRadius: 8,
-              color: "#f5f5f5",
+              color: "#111111",
               fontSize: 11,
+              boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
             }}
           />
           {entries.map((entry, i) => (
@@ -92,7 +93,7 @@ export function SignalBreakdown({ entries }: SignalBreakdownProps) {
             />
           ))}
           <Legend
-            wrapperStyle={{ fontSize: 11, color: "#71717a", paddingTop: 8 }}
+            wrapperStyle={{ fontSize: 11, color: "#6B7280", paddingTop: 8 }}
           />
         </RadarChart>
       </ResponsiveContainer>

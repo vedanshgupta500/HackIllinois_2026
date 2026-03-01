@@ -41,22 +41,20 @@ export function FaceStrip({
               key={face.id}
               onClick={() => onSelect?.(face.id)}
               className={cn(
-                "flex-shrink-0 flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-200 group",
+                "flex-shrink-0 flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-200",
                 onSelect && "cursor-pointer",
                 isSelected
-                  ? "bg-violet-950/40 border border-violet-700/50 shadow-lg shadow-violet-950/30"
-                  : "bg-zinc-900/40 border border-zinc-800/50 hover:border-zinc-700"
+                  ? "bg-blue-50 border border-blue-200"
+                  : "bg-white border border-gray-200 hover:border-gray-300"
               )}
             >
               {/* Face image */}
               <div className="relative">
                 <div
                   className={cn(
-                    "rounded-xl overflow-hidden border-2 transition-all duration-200 shadow-md",
+                    "rounded-xl overflow-hidden border-2 transition-all duration-200",
                     compact ? "w-12 h-12" : "w-16 h-16",
-                    isSelected
-                      ? `${colors.border} shadow-lg`
-                      : "border-zinc-700 group-hover:border-zinc-600"
+                    isSelected ? colors.border : "border-gray-200"
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -69,7 +67,7 @@ export function FaceStrip({
 
                 {/* Selection indicator */}
                 {isSelected && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-600 border-2 border-zinc-900 flex items-center justify-center">
+                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center">
                     <svg
                       width="8"
                       height="8"
@@ -89,7 +87,7 @@ export function FaceStrip({
                 {/* Confidence dot */}
                 <div
                   className={cn(
-                    "absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border border-zinc-900",
+                    "absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border border-white",
                     face.confidence > 0.8
                       ? "bg-emerald-500"
                       : face.confidence > 0.6
@@ -104,7 +102,7 @@ export function FaceStrip({
                 <span
                   className={cn(
                     "text-xs font-medium truncate",
-                    isSelected ? "text-zinc-200" : "text-zinc-400"
+                    isSelected ? "text-blue-700" : "text-gray-600"
                   )}
                 >
                   {names[face.id] || `Person ${i + 1}`}

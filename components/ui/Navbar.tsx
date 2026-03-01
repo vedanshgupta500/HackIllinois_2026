@@ -9,10 +9,10 @@ interface NavbarProps {
 
 export function Navbar({ onUploadNew }: NavbarProps) {
   return (
-    <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-40">
+    <header className="border-b border-gray-200 bg-white/95 backdrop-blur-sm sticky top-0 z-40">
       <div className="container flex items-center justify-between h-14">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold text-zinc-200 tracking-tight">
+          <span className="text-sm font-semibold text-gray-900 tracking-tight">
             Mog.GPT
           </span>
           <Badge variant="muted">Beta</Badge>
@@ -21,7 +21,7 @@ export function Navbar({ onUploadNew }: NavbarProps) {
         {onUploadNew && (
           <button
             onClick={onUploadNew}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all duration-200"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 transition-all duration-150"
           >
             <RotateCcw size={12} />
             New Upload

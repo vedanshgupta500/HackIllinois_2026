@@ -45,23 +45,18 @@ export function ComparisonCard({
   return (
     <div
       className={cn(
-        "card relative overflow-hidden transition-all duration-500 group",
-        isWinner && "ring-1 ring-violet-600/50 shadow-xl shadow-violet-950/40",
+        "card relative overflow-hidden transition-all duration-500",
+        isWinner && "border-l-4 border-l-blue-500",
         ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
       )}
       style={{
         transitionDelay: `${colorIndex * 100}ms`,
       }}
     >
-      {/* Winner glow */}
-      {isWinner && (
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-950/30 via-transparent to-purple-950/20 pointer-events-none" />
-      )}
-
       {/* Winner badge */}
       {isWinner && (
         <div className="absolute top-3 right-3 z-10">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[9px] font-bold uppercase tracking-wider shadow-lg shadow-violet-600/40">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-semibold uppercase tracking-wider">
             <Crown size={9} />
             Winner
           </span>
@@ -75,10 +70,8 @@ export function ComparisonCard({
           <div className="relative flex-shrink-0">
             <div
               className={cn(
-                "w-20 h-20 rounded-xl overflow-hidden border-2 shadow-lg transition-all duration-300",
-                isWinner
-                  ? "border-violet-600/60 shadow-violet-950/50"
-                  : `${colors.border} shadow-black/20`
+                "w-20 h-20 rounded-xl overflow-hidden border-2 transition-all duration-300",
+                isWinner ? "border-blue-300" : `${colors.border}`
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -91,10 +84,8 @@ export function ComparisonCard({
             {/* Rank badge */}
             <div
               className={cn(
-                "absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-md border-2 border-zinc-900",
-                isWinner
-                  ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white"
-                  : "bg-zinc-800 text-zinc-400"
+                "absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow-sm border-2 border-white",
+                isWinner ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 border-gray-200"
               )}
             >
               #{rank}
@@ -104,7 +95,7 @@ export function ComparisonCard({
           {/* Name + score */}
           <div className="flex-1 min-w-0 pt-1">
             <div className="flex items-center gap-1.5 mb-1">
-              <h4 className="text-zinc-100 font-semibold truncate">{name}</h4>
+              <h4 className="text-gray-900 font-semibold truncate">{name}</h4>
               {onNameChange && (
                 <EditNameButton name={name} onSave={onNameChange} />
               )}
@@ -113,12 +104,12 @@ export function ComparisonCard({
               <span
                 className={cn(
                   "text-3xl font-bold tabular-nums tracking-tight",
-                  colors.text
+                  isWinner ? "text-blue-600" : colors.text
                 )}
               >
                 {totalScore}
               </span>
-              <span className="text-zinc-600 text-sm">/100</span>
+              <span className="text-gray-400 text-sm">/100</span>
             </div>
           </div>
         </div>
@@ -131,29 +122,27 @@ export function ComparisonCard({
           return (
             <div key={s.key}>
               <div className="flex justify-between mb-1">
-                <span className="text-zinc-500 text-xs">{s.label}</span>
+                <span className="text-gray-500 text-xs">{s.label}</span>
                 <span
                   className={cn(
                     "text-xs font-medium tabular-nums",
-                    colors.text
+                    isWinner ? "text-blue-700" : colors.text
                   )}
                 >
                   {val}
                 </span>
               </div>
-              <div className="h-1.5 bg-zinc-900/80 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={cn(
-                    "h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden",
-                    colors.bar
+                    "h-full rounded-full transition-all duration-700 ease-out",
+                    isWinner ? "bg-blue-500" : colors.bar
                   )}
                   style={{
                     width: ready ? `${val}%` : "0%",
                     transitionDelay: `${colorIndex * 100 + 200}ms`,
                   }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
-                </div>
+                />
               </div>
             </div>
           );

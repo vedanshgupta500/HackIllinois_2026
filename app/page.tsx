@@ -131,6 +131,16 @@ export default function HomePage() {
         const result = await response.json();
         if (result.success) {
           explanation = result.data.explanation || "";
+          // Replace generic "Person A" / "Person B" with the names the user entered.
+          // Faces are sorted left→right, matching Claude's Person A (left) / Person B (right).
+          const sortedFaceIds = [...faces].sort((a, b) => a.bbox.x - b.bbox.x).map((f) => f.id);
+          if (explanation && sortedFaceIds.length >= 1) {
+            const nameA = confirmedNames[sortedFaceIds[0]] || "Person A";
+            const nameB = sortedFaceIds[1] ? confirmedNames[sortedFaceIds[1]] || "Person B" : "Person B";
+            explanation = explanation
+              .replace(/\bPerson A\b/g, nameA)
+              .replace(/\bPerson B\b/g, nameB);
+          }
           disclaimer = result.data.disclaimer || disclaimer;
 
           // Blend: Claude knows image context, BodyPix knows actual body metrics
@@ -271,40 +281,22 @@ export default function HomePage() {
     <>
       <Navbar />
 
-      <main className="min-h-[calc(100vh-56px)] flex flex-col relative overflow-hidden">
-        {/* Background image - ASU frat leader with fade animation */}
-        {/* TODO: Add image URL when provided */}
-        {/* <div className="absolute inset-0 z-0 animate-background-fade">
-          <img 
-            src="/your-image.jpg" 
-            alt="Background" 
-            className="w-full h-full object-cover"
-          />
-        </div> */}
-        
-        {/* Animated background gradients */}
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "1s" }} />
-        
+      <main className="min-h-[calc(100vh-56px)] flex flex-col">
         {/* ── Hero ── */}
-        <section className="flex-1 flex flex-col items-center justify-center py-16 px-6 relative z-10">
-          <div className="w-full max-w-prose flex flex-col items-center gap-8 animate-fade-in">
+        <section className="flex-1 flex flex-col items-center justify-center py-16 px-6">
+          <div className="w-full max-w-md flex flex-col items-center gap-8 animate-fade-in">
 
             {/* Eyebrow */}
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-1 rounded-full bg-violet-500 animate-pulse" />
-              <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
-                Inspired from ASU frat leader
-              </p>
-              <div className="w-1 h-1 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: "0.5s" }} />
-            </div>
+            <p className="text-gray-400 text-xs font-medium uppercase tracking-widest">
+              Frame Analysis Tool
+            </p>
 
             {/* Headline */}
             <div className="text-center space-y-3">
-              <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-zinc-50 text-gradient animate-float leading-tight">
+              <h1 className="text-gray-900">
                 Mog.GPT
               </h1>
-              <p className="text-zinc-400 text-base max-w-sm mx-auto leading-relaxed">
+              <p className="text-gray-500 text-base max-w-xs mx-auto leading-relaxed">
                 Upload a photo with 2–6 people. AI scores who commands the frame.
               </p>
             </div>
@@ -323,11 +315,11 @@ export default function HomePage() {
 
             {/* Error */}
             {error && (
-              <div className="w-full p-4 rounded-xl border border-red-900/60 bg-red-950/30 text-center animate-fade-in">
-                <p className="text-red-400 text-sm">{error}</p>
+              <div className="w-full p-4 rounded-xl border border-red-200 bg-red-50 text-center animate-fade-in">
+                <p className="text-red-600 text-sm">{error}</p>
                 <button
                   onClick={resetAll}
-                  className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors underline"
+                  className="mt-2 text-xs text-gray-500 hover:text-gray-800 transition-colors underline"
                 >
                   Try a different image
                 </button>
@@ -341,13 +333,13 @@ export default function HomePage() {
         </section>
 
         {/* ── Signal legend ── */}
-        <section className="border-t border-zinc-900 py-8">
+        <section className="border-t border-gray-200 py-8">
           <div className="container">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-zinc-900 rounded-xl overflow-hidden border border-zinc-900">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-200 rounded-xl overflow-hidden border border-gray-200">
               {SIGNALS.map((s) => (
-                <div key={s.label} className="bg-zinc-950 px-4 py-4">
-                  <p className="text-zinc-300 text-xs font-medium">{s.label}</p>
-                  <p className="text-zinc-600 text-xs mt-0.5">{s.desc}</p>
+                <div key={s.label} className="bg-white px-4 py-4">
+                  <p className="text-gray-800 text-xs font-medium">{s.label}</p>
+                  <p className="text-gray-400 text-xs mt-0.5">{s.desc}</p>
                 </div>
               ))}
             </div>
@@ -355,9 +347,9 @@ export default function HomePage() {
         </section>
 
         {/* ── Footer ── */}
-        <footer className="border-t border-zinc-900 py-5">
+        <footer className="border-t border-gray-200 py-5">
           <div className="container">
-            <p className="text-zinc-700 text-xs text-center">
+            <p className="text-gray-400 text-xs text-center">
               Analysis covers photographic composition only — not attractiveness or personal qualities.
             </p>
           </div>
