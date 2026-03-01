@@ -20,128 +20,6 @@ async function loadModels(): Promise<void> {
   }
 }
 
-interface SkinRegion {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  density: number;
-}
-
-function findSkinRegions(
-  imageData: ImageData,
-  gridSize: number = 16
-): SkinRegion[] {
-  const { data, width, height } = imageData;
-  const cols = Math.floor(width / gridSize);
-  const rows = Math.floor(height / gridSize);
-  const grid: number[][] = Array.from({ length: rows }, () =>
-    Array(cols).fill(0)
-  );
-
-  // Build skin density grid
-  for (let gy = 0; gy < rows; gy++) {
-    for (let gx = 0; gx < cols; gx++) {
-      let skinPixels = 0;
-      let total = 0;
-      for (let py = 0; py < gridSize; py++) {
-        for (let px = 0; px < gridSize; px++) {
-          const ix = gx * gridSize + px;
-          const iy = gy * gridSize + py;
-          if (ix >= width || iy >= height) continue;
-          const idx = (iy * width + ix) * 4;
-          total++;
-          if (isSkinTone(data[idx], data[idx + 1], data[idx + 2])) {
-            skinPixels++;
-          }
-        }
-      }
-      grid[gy][gx] = total > 0 ? skinPixels / total : 0;
-    }
-  }
-
-  // Flood-fill connected high-density cells
-  const visited = Array.from({ length: rows }, () =>
-    Array(cols).fill(false)
-  );
-  const regions: SkinRegion[] = [];
-  const THRESHOLD = 0.15; // Lower threshold to detect more faces
-
-  for (let gy = 0; gy < rows; gy++) {
-    for (let gx = 0; gx < cols; gx++) {
-      if (visited[gy][gx] || grid[gy][gx] < THRESHOLD) continue;
-      // BFS
-      const queue = [[gx, gy]];
-      visited[gy][gx] = true;
-      let minX = gx,
-        maxX = gx,
-        minY = gy,
-        maxY = gy;
-      let totalDensity = 0;
-      let cellCount = 0;
-
-      while (queue.length > 0) {
-        const [cx, cy] = queue.shift()!;
-        totalDensity += grid[cy][cx];
-        cellCount++;
-        minX = Math.min(minX, cx);
-        maxX = Math.max(maxX, cx);
-        minY = Math.min(minY, cy);
-        maxY = Math.max(maxY, cy);
-
-        for (const [dx, dy] of [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1],
-        ]) {
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (
-            nx >= 0 &&
-            nx < cols &&
-            ny >= 0 &&
-            ny < rows &&
-            !visited[ny][nx] &&
-            grid[ny][nx] >= THRESHOLD
-          ) {
-            visited[ny][nx] = true;
-            queue.push([nx, ny]);
-          }
-        }
-      }
-
-      const regionW = (maxX - minX + 1) * gridSize;
-      const regionH = (maxY - minY + 1) * gridSize;
-      const avgDensity = cellCount > 0 ? totalDensity / cellCount : 0;
-
-      // Face-like aspect ratio check: more permissive
-      const aspect = regionW / (regionH || 1);
-      const minArea = width * height * 0.002; // at least 0.2% of frame (smaller faces)
-      const area = regionW * regionH;
-
-      if (
-        area >= minArea &&
-        aspect > 0.3 &&
-        aspect < 2.5 &&
-        avgDensity > 0.2
-      ) {
-        regions.push({
-          x: minX * gridSize,
-          y: minY * gridSize,
-          w: regionW,
-          h: regionH,
-          density: avgDensity,
-        });
-      }
-    }
-  }
-
-  // Sort by density descending, take top N
-  regions.sort((a, b) => b.density - a.density);
-  return regions;
-}
-
 function cropFace(
   canvas: HTMLCanvasElement,
   img: HTMLImageElement,
@@ -164,7 +42,8 @@ function cropFace(
 }
 
 /**
- * Detect faces in an image using TensorFlow BlazeFace model
+ * Detect faces in an image using face-api.js TinyFaceDetector
+ * Uses very sensitive parameters to detect all faces including small or partially visible ones
  */
 export async function detectFaces(imageSrc: string): Promise<Face[]> {
   return new Promise((resolve) => {
@@ -172,31 +51,36 @@ export async function detectFaces(imageSrc: string): Promise<Face[]> {
     img.crossOrigin = "anonymous";
     img.onload = async () => {
       try {
-        // Load the BlazeFace model
-        const model = await loadModel();
+        // Load the face-api.js model
+        await loadModels();
         
-        // Run face detection
-        console.log('[BlazeFace] Running face detection...');
-        const predictions = await model.estimateFaces(img, false);
-        console.log(`[BlazeFace] Detected ${predictions.length} faces`);
+        // Run face detection with very sensitive parameters
+        console.log('[FaceAPI] Running face detection...');
         
-        if (predictions.length === 0) {
+        // TinyFaceDetector options - use very low threshold to catch all faces
+        const options = new faceapi.TinyFaceDetectorOptions({
+          inputSize: 512,      // Higher resolution for better detection
+          scoreThreshold: 0.3  // Very low threshold to detect all faces (default is 0.5)
+        });
+        
+        const detections = await faceapi.detectAllFaces(img, options);
+        console.log(`[FaceAPI] Detected ${detections.length} faces`);
+        
+        if (detections.length === 0) {
           resolve([]);
           return;
         }
         
-        // Convert BlazeFace predictions to our Face format
+        // Convert face-api.js detections to our Face format
         const cropCanvas = document.createElement("canvas");
-        const faces: Face[] = predictions.map((prediction, i) => {
-          // BlazeFace returns: topLeft, bottomRight, landmarks, probability
-          const start = prediction.topLeft as [number, number];
-          const end = prediction.bottomRight as [number, number];
+        const faces: Face[] = detections.map((detection, i) => {
+          const box = detection.box;
           
           const bbox: BBox = {
-            x: start[0],
-            y: start[1],
-            w: end[0] - start[0],
-            h: end[1] - start[1],
+            x: box.x,
+            y: box.y,
+            w: box.width,
+            h: box.height,
           };
           
           const cropUrl = cropFace(cropCanvas, img, bbox);
@@ -205,9 +89,7 @@ export async function detectFaces(imageSrc: string): Promise<Face[]> {
             id: `face_${i}`,
             bbox,
             cropUrl,
-            confidence: Array.isArray(prediction.probability) 
-              ? prediction.probability[0] 
-              : prediction.probability,
+            confidence: detection.score,
           };
         });
         
@@ -225,51 +107,16 @@ export async function detectFaces(imageSrc: string): Promise<Face[]> {
         
         resolve(faces);
       } catch (error) {
-        console.error('[BlazeFace] Error detecting faces:', error);
+        console.error('[FaceAPI] Error detecting faces:', error);
         resolve([]);
       }
     };
     img.onerror = () => {
-      console.error('[BlazeFace] Error loading image');
+      console.error('[FaceAPI] Error loading image');
       resolve([]);
     };
     img.src = imageSrc;
   });
-}
-
-function mergeOverlapping(regions: SkinRegion[]): SkinRegion[] {
-  if (regions.length <= 1) return regions;
-  const merged: SkinRegion[] = [];
-  const used = new Set<number>();
-
-  for (let i = 0; i < regions.length; i++) {
-    if (used.has(i)) continue;
-    let r = { ...regions[i] };
-    for (let j = i + 1; j < regions.length; j++) {
-      if (used.has(j)) continue;
-      const other = regions[j];
-      // Check overlap
-      const ox = Math.max(r.x, other.x);
-      const oy = Math.max(r.y, other.y);
-      const ox2 = Math.min(r.x + r.w, other.x + other.w);
-      const oy2 = Math.min(r.y + r.h, other.y + other.h);
-      if (ox < ox2 && oy < oy2) {
-        // Merge
-        const nx = Math.min(r.x, other.x);
-        const ny = Math.min(r.y, other.y);
-        r = {
-          x: nx,
-          y: ny,
-          w: Math.max(r.x + r.w, other.x + other.w) - nx,
-          h: Math.max(r.y + r.h, other.y + other.h) - ny,
-          density: Math.max(r.density, other.density),
-        };
-        used.add(j);
-      }
-    }
-    merged.push(r);
-  }
-  return merged;
 }
 
 /**

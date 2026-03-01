@@ -266,7 +266,7 @@ export default function HomePage() {
             <div className="flex items-center gap-2">
               <div className="w-1 h-1 rounded-full bg-violet-500 animate-pulse" />
               <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
-                Compositional AI
+                Inspired from ASU frat leader
               </p>
               <div className="w-1 h-1 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: "0.5s" }} />
             </div>

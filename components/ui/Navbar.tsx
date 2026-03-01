@@ -13,7 +13,7 @@ export function Navbar({ onUploadNew }: NavbarProps) {
       <div className="container flex items-center justify-between h-14">
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-semibold text-zinc-200 tracking-tight">
-            Frame
+            Mog.GPT
           </span>
           <Badge variant="muted">Beta</Badge>
         </div>
