@@ -11,6 +11,7 @@ import { Navbar } from "@/components/ui/Navbar";
 import { ScanCounter } from "@/components/ui/ScanCounter";
 import { Button } from "@/components/ui/Button";
 import { detectFaces, generateScores } from "@/lib/faceDetection";
+import { scanBodies } from "@/lib/bodyScanning";
 import type { Face, Person, AppStep, AnalysisResult } from "@/types/analysis";
 
 const SIGNALS = [
@@ -74,21 +75,36 @@ export default function HomePage() {
     }
   }, [file, preview]);
 
-  /* ── Step 2→3: Names confirmed, run analysis ── */
+  /* ── Step 2→3: Names confirmed, run body scan + analysis ── */
   const handleNamesConfirmed = useCallback(async (confirmedNames: Record<string, string>) => {
     setNames(confirmedNames);
     setStep("analyzing");
 
     try {
-      // Generate client-side scores from face positions
+      // Run BodyPix body scan + image load in parallel
       const img = new Image();
       img.src = preview!;
-      await new Promise<void>((resolve) => {
-        img.onload = () => resolve();
-        if (img.complete) resolve();
-      });
+      const [bodyScanResults] = await Promise.all([
+        scanBodies(preview!).catch(() => []),
+        new Promise<void>((resolve) => {
+          if (img.complete) { resolve(); return; }
+          img.onload = () => resolve();
+        }),
+      ]);
 
+      // Build person data — BodyPix body signals as primary, face bbox as fallback
+      // Both face-api and BodyPix sort left-to-right so indices align
       const personData: Person[] = faces.map((face, i) => {
+        const body = bodyScanResults[i];
+        if (body) {
+          return {
+            faceId: face.id,
+            name: confirmedNames[face.id] || `Person ${i + 1}`,
+            scores: body.signals,
+            totalScore: body.composite_score,
+          };
+        }
+        // Fallback: bbox heuristic from face-api detection
         const { scores, totalScore } = generateScores(face, img.width, img.height);
         return {
           faceId: face.id,
@@ -98,17 +114,9 @@ export default function HomePage() {
         };
       });
 
-      // Sort by total score descending to determine ranks
-      const sorted = [...personData].sort((a, b) => b.totalScore - a.totalScore);
-      sorted.forEach((p, i) => {
-        const original = personData.find((o) => o.faceId === p.faceId)!;
-        // Assign rank — we keep it on the person data for ResultsView
-        (original as Person & { rank?: number }).totalScore = p.totalScore;
-      });
-
       setPersons(personData);
 
-      // Also call the API for explanation text
+      // Claude API: get explanation text + blend signals for even better accuracy
       let explanation = "";
       let disclaimer = "Analysis covers photographic composition only — not attractiveness or personal qualities.";
 
@@ -122,48 +130,58 @@ export default function HomePage() {
         });
         const result = await response.json();
         if (result.success) {
-          setApiResult(result.data);
           explanation = result.data.explanation || "";
           disclaimer = result.data.disclaimer || disclaimer;
 
-          // Optionally blend API scores with face-detection scores
+          // Blend: Claude knows image context, BodyPix knows actual body metrics
           if (result.data.people && result.data.people.length >= 2) {
-            // Use API scores for better accuracy when available
             const apiPeople = result.data.people;
             personData.forEach((p, i) => {
-              if (apiPeople[i]) {
-                p.scores = apiPeople[i].signals;
-                p.totalScore = apiPeople[i].composite_score;
+              const api = apiPeople[i];
+              const body = bodyScanResults[i];
+              if (!api) return;
+              if (body) {
+                // Posture dominance: trust BodyPix more (real keypoints)
+                // Spatial/facial/attention: trust Claude more (scene context)
+                p.scores = {
+                  spatial_presence:   Math.round(api.signals.spatial_presence   * 0.6 + body.signals.spatial_presence   * 0.4),
+                  posture_dominance:  Math.round(api.signals.posture_dominance  * 0.4 + body.signals.posture_dominance  * 0.6),
+                  facial_intensity:   Math.round(api.signals.facial_intensity   * 0.6 + body.signals.facial_intensity   * 0.4),
+                  attention_capture:  Math.round(api.signals.attention_capture  * 0.5 + body.signals.attention_capture  * 0.5),
+                };
+              } else {
+                p.scores = api.signals;
               }
-            });
-            // Re-sort after blending
-            const reSorted = [...personData].sort((a, b) => b.totalScore - a.totalScore);
-            reSorted.forEach((p, i) => {
-              const original = personData.find((o) => o.faceId === p.faceId)!;
-              original.totalScore = p.totalScore;
+              p.totalScore = Math.round(
+                (p.scores.spatial_presence  * 0.30 +
+                 p.scores.posture_dominance * 0.25 +
+                 p.scores.facial_intensity  * 0.25 +
+                 p.scores.attention_capture * 0.20) * 10
+              ) / 10;
             });
             setPersons([...personData]);
           }
+
+          setApiResult(result.data);
         }
       } catch {
-        // API failed — use client-side scores (already set)
-        console.warn("[page] API analysis failed, using client-side scores");
+        console.warn("[page] API analysis failed, using body scan scores");
       }
 
       setProcessingTime(Date.now() - startTimeRef.current);
 
-      // Build a "fake" apiResult for ResultsView if API didn't return one
       if (!apiResult) {
+        const sorted = [...personData].sort((a, b) => b.totalScore - a.totalScore);
         setApiResult({
-          people: personData.map((p, i) => ({
-            label: confirmedNames[p.faceId] || `Person ${i + 1}`,
+          people: sorted.map((p, i) => ({
+            label: p.name,
             position: "center",
             signals: p.scores,
             composite_score: p.totalScore,
             rank: i + 1,
           })),
           winner_index: 0,
-          is_tie: personData.length >= 2 && Math.abs(personData[0].totalScore - personData[1].totalScore) < 3,
+          is_tie: sorted.length >= 2 && Math.abs(sorted[0].totalScore - sorted[1].totalScore) < 3,
           explanation,
           disclaimer,
           processing_time_ms: Date.now() - startTimeRef.current,
