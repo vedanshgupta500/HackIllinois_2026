@@ -8,7 +8,22 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+      },
+      maxWidth: {
+        container: "1100px",
+        prose: "640px",
+      },
       keyframes: {
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "scan": {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100vh)" },
+        },
         "scan-down": {
           "0%": { transform: "translateY(-100%)" },
           "100%": { transform: "translateY(100vh)" },
@@ -22,20 +37,17 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(8px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
-        "fade-in": {
-          from: { opacity: "0" },
-          to: { opacity: "1" },
-        },
         "slide-up": {
           from: { opacity: "0", transform: "translateY(16px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
+        "fade-in": "fade-in 0.35s ease-out forwards",
+        "scan": "scan 2.4s linear infinite",
         "scan-down": "scan-down 2s linear infinite",
         "pulse-ring": "pulse-ring 2s ease-in-out infinite",
         "count-up": "count-up 0.5s ease-out forwards",
-        "fade-in": "fade-in 0.4s ease-out forwards",
         "slide-up": "slide-up 0.5s ease-out forwards",
       },
     },

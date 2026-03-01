@@ -1,0 +1,70 @@
+"use client";
+
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import type { AnalysisResult } from "@/types/analysis";
+import { PERSON_COLORS } from "@/lib/utils";
+
+const RADAR_COLORS = ["#8b5cf6", "#f59e0b", "#10b981", "#f43f5e", "#0ea5e9", "#f97316"];
+
+interface RadarChartViewProps {
+  result: AnalysisResult;
+}
+
+export function RadarChartView({ result }: RadarChartViewProps) {
+  const data = [
+    { axis: "Spatial",  ...Object.fromEntries(result.people.map((p, i) => [`p${i}`, p.signals.spatial_presence])) },
+    { axis: "Posture",  ...Object.fromEntries(result.people.map((p, i) => [`p${i}`, p.signals.posture_dominance])) },
+    { axis: "Facial",   ...Object.fromEntries(result.people.map((p, i) => [`p${i}`, p.signals.facial_intensity])) },
+    { axis: "Attention",...Object.fromEntries(result.people.map((p, i) => [`p${i}`, p.signals.attention_capture])) },
+  ];
+
+  return (
+    <div className="card p-5">
+      <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest mb-4">
+        Signal Breakdown
+      </p>
+      <ResponsiveContainer width="100%" height={260}>
+        <RadarChart data={data} cx="50%" cy="50%" outerRadius="72%">
+          <PolarGrid stroke="#1f1f1f" />
+          <PolarAngleAxis
+            dataKey="axis"
+            tick={{ fill: "#52525b", fontSize: 11, fontWeight: 500 }}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "#111",
+              border: "1px solid #1f1f1f",
+              borderRadius: 8,
+              color: "#f5f5f5",
+              fontSize: 11,
+            }}
+          />
+          {result.people.map((person, i) => (
+            <Radar
+              key={person.label}
+              name={person.label}
+              dataKey={`p${i}`}
+              stroke={RADAR_COLORS[i % RADAR_COLORS.length]}
+              fill={RADAR_COLORS[i % RADAR_COLORS.length]}
+              fillOpacity={0.18}
+              strokeWidth={1.5}
+              animationBegin={i * 150}
+              animationDuration={700}
+            />
+          ))}
+          <Legend
+            wrapperStyle={{ fontSize: 11, color: "#71717a", paddingTop: 8 }}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

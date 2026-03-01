@@ -1,0 +1,292 @@
+"use client";
+
+import type { Face, BBox } from "@/types/analysis";
+
+/**
+ * Lightweight client-side face detection using skin-tone heuristics
+ * and edge analysis. Returns bounding boxes + cropped face images.
+ *
+ * For a hackathon demo this is sufficient — production would use
+ * MediaPipe Face Detection or a similar WASM model.
+ */
+
+function isSkinTone(r: number, g: number, b: number): boolean {
+  // YCbCr-based skin detection
+  const y = 0.299 * r + 0.587 * g + 0.114 * b;
+  const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+  const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+  return y > 80 && cb > 85 && cb < 135 && cr > 135 && cr < 180;
+}
+
+interface SkinRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  density: number;
+}
+
+function findSkinRegions(
+  imageData: ImageData,
+  gridSize: number = 16
+): SkinRegion[] {
+  const { data, width, height } = imageData;
+  const cols = Math.floor(width / gridSize);
+  const rows = Math.floor(height / gridSize);
+  const grid: number[][] = Array.from({ length: rows }, () =>
+    Array(cols).fill(0)
+  );
+
+  // Build skin density grid
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      let skinPixels = 0;
+      let total = 0;
+      for (let py = 0; py < gridSize; py++) {
+        for (let px = 0; px < gridSize; px++) {
+          const ix = gx * gridSize + px;
+          const iy = gy * gridSize + py;
+          if (ix >= width || iy >= height) continue;
+          const idx = (iy * width + ix) * 4;
+          total++;
+          if (isSkinTone(data[idx], data[idx + 1], data[idx + 2])) {
+            skinPixels++;
+          }
+        }
+      }
+      grid[gy][gx] = total > 0 ? skinPixels / total : 0;
+    }
+  }
+
+  // Flood-fill connected high-density cells
+  const visited = Array.from({ length: rows }, () =>
+    Array(cols).fill(false)
+  );
+  const regions: SkinRegion[] = [];
+  const THRESHOLD = 0.25;
+
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      if (visited[gy][gx] || grid[gy][gx] < THRESHOLD) continue;
+      // BFS
+      const queue = [[gx, gy]];
+      visited[gy][gx] = true;
+      let minX = gx,
+        maxX = gx,
+        minY = gy,
+        maxY = gy;
+      let totalDensity = 0;
+      let cellCount = 0;
+
+      while (queue.length > 0) {
+        const [cx, cy] = queue.shift()!;
+        totalDensity += grid[cy][cx];
+        cellCount++;
+        minX = Math.min(minX, cx);
+        maxX = Math.max(maxX, cx);
+        minY = Math.min(minY, cy);
+        maxY = Math.max(maxY, cy);
+
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (
+            nx >= 0 &&
+            nx < cols &&
+            ny >= 0 &&
+            ny < rows &&
+            !visited[ny][nx] &&
+            grid[ny][nx] >= THRESHOLD
+          ) {
+            visited[ny][nx] = true;
+            queue.push([nx, ny]);
+          }
+        }
+      }
+
+      const regionW = (maxX - minX + 1) * gridSize;
+      const regionH = (maxY - minY + 1) * gridSize;
+      const avgDensity = cellCount > 0 ? totalDensity / cellCount : 0;
+
+      // Face-like aspect ratio check: roughly square to 2:3
+      const aspect = regionW / (regionH || 1);
+      const minArea = width * height * 0.005; // at least 0.5% of frame
+      const area = regionW * regionH;
+
+      if (
+        area >= minArea &&
+        aspect > 0.4 &&
+        aspect < 2.0 &&
+        avgDensity > 0.3
+      ) {
+        regions.push({
+          x: minX * gridSize,
+          y: minY * gridSize,
+          w: regionW,
+          h: regionH,
+          density: avgDensity,
+        });
+      }
+    }
+  }
+
+  // Sort by density descending, take top N
+  regions.sort((a, b) => b.density - a.density);
+  return regions;
+}
+
+function cropFace(
+  canvas: HTMLCanvasElement,
+  img: HTMLImageElement,
+  bbox: BBox
+): string {
+  const PAD = 0.35; // 35% padding around face
+  const padX = bbox.w * PAD;
+  const padY = bbox.h * PAD;
+  const sx = Math.max(0, bbox.x - padX);
+  const sy = Math.max(0, bbox.y - padY);
+  const sw = Math.min(img.width - sx, bbox.w + padX * 2);
+  const sh = Math.min(img.height - sy, bbox.h + padY * 2);
+
+  const size = 200;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+/**
+ * Detect faces in an image element and return Face[] with crops.
+ * Deterministic given the same image.
+ */
+export async function detectFaces(imageSrc: string): Promise<Face[]> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const analysis = document.createElement("canvas");
+      analysis.width = img.width;
+      analysis.height = img.height;
+      const ctx = analysis.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+      const regions = findSkinRegions(imageData);
+
+      // Merge overlapping regions
+      const merged = mergeOverlapping(regions);
+
+      // Limit to 6 faces max
+      const topRegions = merged.slice(0, 6);
+
+      if (topRegions.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      const cropCanvas = document.createElement("canvas");
+      const faces: Face[] = topRegions.map((r, i) => {
+        const bbox: BBox = { x: r.x, y: r.y, w: r.w, h: r.h };
+        const cropUrl = cropFace(cropCanvas, img, bbox);
+        return {
+          id: `face_${i}`,
+          bbox,
+          cropUrl,
+          confidence: Math.min(0.99, 0.6 + r.density * 0.4),
+        };
+      });
+
+      // Sort faces left-to-right
+      faces.sort((a, b) => a.bbox.x - b.bbox.x);
+      // Re-number IDs
+      faces.forEach((f, i) => (f.id = `face_${i}`));
+
+      resolve(faces);
+    };
+    img.onerror = () => resolve([]);
+    img.src = imageSrc;
+  });
+}
+
+function mergeOverlapping(regions: SkinRegion[]): SkinRegion[] {
+  if (regions.length <= 1) return regions;
+  const merged: SkinRegion[] = [];
+  const used = new Set<number>();
+
+  for (let i = 0; i < regions.length; i++) {
+    if (used.has(i)) continue;
+    let r = { ...regions[i] };
+    for (let j = i + 1; j < regions.length; j++) {
+      if (used.has(j)) continue;
+      const other = regions[j];
+      // Check overlap
+      const ox = Math.max(r.x, other.x);
+      const oy = Math.max(r.y, other.y);
+      const ox2 = Math.min(r.x + r.w, other.x + other.w);
+      const oy2 = Math.min(r.y + r.h, other.y + other.h);
+      if (ox < ox2 && oy < oy2) {
+        // Merge
+        const nx = Math.min(r.x, other.x);
+        const ny = Math.min(r.y, other.y);
+        r = {
+          x: nx,
+          y: ny,
+          w: Math.max(r.x + r.w, other.x + other.w) - nx,
+          h: Math.max(r.y + r.h, other.y + other.h) - ny,
+          density: Math.max(r.density, other.density),
+        };
+        used.add(j);
+      }
+    }
+    merged.push(r);
+  }
+  return merged;
+}
+
+/**
+ * Generate deterministic pseudo-scores from a face's bounding box.
+ * Stable across refreshes for the same image.
+ */
+export function generateScores(face: Face, imgWidth: number, imgHeight: number) {
+  // Simple hash from bbox
+  const seed = face.bbox.x * 7 + face.bbox.y * 13 + face.bbox.w * 31 + face.bbox.h * 37;
+  const hash = (v: number) => ((Math.sin(v) * 10000) % 1 + 1) % 1; // 0-1
+
+  const frameRatio = (face.bbox.w * face.bbox.h) / (imgWidth * imgHeight);
+  const centerX = (face.bbox.x + face.bbox.w / 2) / imgWidth;
+  const centerDist = Math.abs(centerX - 0.5);
+
+  const spatial = Math.round(
+    Math.min(95, Math.max(30, frameRatio * 400 + hash(seed + 1) * 20 + 35))
+  );
+  const posture = Math.round(
+    Math.min(95, Math.max(25, 50 + hash(seed + 2) * 30 + (1 - centerDist) * 15))
+  );
+  const facial = Math.round(
+    Math.min(95, Math.max(30, face.confidence * 60 + hash(seed + 3) * 25 + 15))
+  );
+  const attention = Math.round(
+    Math.min(95, Math.max(25, (1 - centerDist) * 50 + hash(seed + 4) * 25 + 20))
+  );
+
+  const total =
+    Math.round(
+      (spatial * 0.3 + posture * 0.25 + facial * 0.25 + attention * 0.2) * 10
+    ) / 10;
+
+  return {
+    scores: {
+      spatial_presence: spatial,
+      posture_dominance: posture,
+      facial_intensity: facial,
+      attention_capture: attention,
+    },
+    totalScore: total,
+  };
+}

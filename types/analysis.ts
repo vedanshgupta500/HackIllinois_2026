@@ -40,3 +40,28 @@ export type AnalyzeResponse =
         | "AI_ERROR"
         | "RATE_LIMIT";
     };
+
+/* ─── Face detection types ─────────────────────────────────────────────── */
+
+export interface BBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface Face {
+  id: string;
+  bbox: BBox;
+  cropUrl: string;          // base64 data-url of cropped face
+  confidence: number;       // 0-1
+}
+
+export interface Person {
+  faceId: string;
+  name: string;
+  scores: PersonSignals;
+  totalScore: number;
+}
+
+export type AppStep = "upload" | "detecting" | "labeling" | "analyzing" | "results";
