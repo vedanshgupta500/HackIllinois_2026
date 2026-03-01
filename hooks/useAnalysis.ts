@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AnalysisResult, AnalyzeResponse } from "@/types/analysis";
+import { resizeImageInBrowser } from "@/lib/imageCompression";
 
 type AnalysisState =
   | { status: "idle" }
@@ -26,8 +27,19 @@ export function useAnalysis() {
     setState({ status: "uploading" });
 
     try {
-      const base64 = await fileToBase64(file);
-      const mimeType = file.type as "image/jpeg" | "image/png" | "image/webp";
+      // Compress image before sending (max 1024x1024, quality 0.85)
+      let processedFile = file;
+      if (file.size > 2 * 1024 * 1024) {
+        console.log("[useAnalysis] Compressing image to reduce file size...");
+        const compressedBlob = await resizeImageInBrowser(file, 1024, 1024);
+        processedFile = new File([compressedBlob], file.name, { type: "image/jpeg" });
+        console.log(
+          `[useAnalysis] Compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`
+        );
+      }
+
+      const base64 = await fileToBase64(processedFile);
+      const mimeType = processedFile.type as "image/jpeg" | "image/png" | "image/webp";
 
       setState({ status: "processing" });
 

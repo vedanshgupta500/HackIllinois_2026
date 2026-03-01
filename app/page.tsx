@@ -2,11 +2,20 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Zap } from "lucide-react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { DropZone } from "@/components/upload/DropZone";
 import { ProcessingScreen } from "@/components/processing/ProcessingScreen";
+import { Navbar } from "@/components/ui/Navbar";
+import { ScanCounter } from "@/components/ui/ScanCounter";
+import { Button } from "@/components/ui/Button";
+
+const SIGNALS = [
+  { label: "Spatial Presence", desc: "Frame area occupied" },
+  { label: "Posture",          desc: "Body orientation"   },
+  { label: "Facial Intensity", desc: "Gaze & expression"  },
+  { label: "Attention Capture",desc: "Compositional pull" },
+];
 
 export default function UploadPage() {
   const router = useRouter();
@@ -25,78 +34,91 @@ export default function UploadPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6">
-      {/* Header */}
-      <div className="text-center mb-10 animate-fade-in">
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <div className="p-2 bg-violet-500/20 rounded-xl">
-            <Zap size={24} className="text-violet-400" />
+    <>
+      <Navbar />
+
+      <main className="min-h-[calc(100vh-56px)] flex flex-col">
+        {/* ── Hero ── */}
+        <section className="flex-1 flex flex-col items-center justify-center py-16 px-6">
+          <div className="w-full max-w-prose flex flex-col items-center gap-8 animate-fade-in">
+
+            {/* Eyebrow */}
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
+              Compositional AI
+            </p>
+
+            {/* Headline */}
+            <div className="text-center space-y-3">
+              <h1 className="text-zinc-50">
+                Who Runs This Frame?
+              </h1>
+              <p className="text-zinc-400 text-base max-w-sm mx-auto leading-relaxed">
+                Upload a photo with 2–6 people. AI scores who commands the frame.
+              </p>
+            </div>
+
+            {/* Upload area */}
+            <div className="w-full">
+              <DropZone preview={preview} error={uploadError} {...uploadProps} />
+            </div>
+
+            {/* Primary CTA */}
+            {file && state.status !== "error" && (
+              <Button size="lg" onClick={() => analyze(file)} className="w-full">
+                Analyze Frame
+              </Button>
+            )}
+
+            {/* Error */}
+            {state.status === "error" && (
+              <div className="w-full p-4 rounded-xl border border-red-900/60 bg-red-950/30 text-center animate-fade-in">
+                <p className="text-red-400 text-sm">
+                  {state.code === "NO_PEOPLE"
+                    ? "No people detected in this photo."
+                    : state.code === "TOO_MANY_PEOPLE"
+                    ? "Too many people (max 6). Try cropping."
+                    : state.code === "POOR_QUALITY"
+                    ? "Image quality is too low to analyze."
+                    : state.message}
+                </p>
+                <button
+                  onClick={reset}
+                  className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors underline"
+                >
+                  Try a different image
+                </button>
+              </div>
+            )}
+
+            {/* Scan counter */}
+            <ScanCounter />
+
           </div>
-          <span className="text-zinc-500 text-sm font-medium uppercase tracking-widest">
-            Visual Dominance AI
-          </span>
-        </div>
-        <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tight leading-tight">
-          Who Runs This Frame?
-        </h1>
-        <p className="text-zinc-400 mt-3 text-lg max-w-md">
-          Upload a photo with 2 people. AI analyzes who commands the frame.
-        </p>
-        <p className="text-zinc-600 text-xs mt-2 max-w-sm mx-auto">
-          Analysis covers photographic composition only — not attractiveness or personal qualities.
-        </p>
-      </div>
+        </section>
 
-      {/* Upload area */}
-      <DropZone
-        preview={preview}
-        error={uploadError}
-        {...uploadProps}
-      />
-
-      {/* Analyze button */}
-      {file && state.status !== "error" && (
-        <button
-          onClick={() => analyze(file)}
-          className="mt-6 px-8 py-3.5 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold rounded-xl transition-all duration-150 shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 hover:-translate-y-0.5 animate-slide-up"
-        >
-          Analyze Frame
-        </button>
-      )}
-
-      {/* Error state */}
-      {state.status === "error" && (
-        <div className="mt-6 p-4 bg-red-950/50 border border-red-800 rounded-xl text-center max-w-sm animate-fade-in">
-          <p className="text-red-400 font-medium text-sm">
-            {state.code === "NOT_TWO_PEOPLE"
-              ? "Couldn't detect exactly 2 people in this photo."
-              : state.code === "POOR_QUALITY"
-              ? "Image quality is too low to analyze."
-              : state.message}
-          </p>
-          <button
-            onClick={reset}
-            className="mt-3 text-xs text-zinc-400 hover:text-white underline transition-colors"
-          >
-            Try a different image
-          </button>
-        </div>
-      )}
-
-      {/* Signal legend */}
-      <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl w-full opacity-60">
-        {[
-          { label: "Spatial Presence", desc: "Frame area occupied" },
-          { label: "Posture Dominance", desc: "Body orientation" },
-          { label: "Facial Intensity", desc: "Gaze & expression" },
-          { label: "Attention Capture", desc: "Compositional pull" },
-        ].map((s) => (
-          <div key={s.label} className="bg-zinc-900 rounded-xl p-3 text-center">
-            <p className="text-zinc-300 text-xs font-semibold">{s.label}</p>
-            <p className="text-zinc-600 text-xs mt-0.5">{s.desc}</p>
+        {/* ── Signal legend ── */}
+        <section className="border-t border-zinc-900 py-8">
+          <div className="container">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-zinc-900 rounded-xl overflow-hidden border border-zinc-900">
+              {SIGNALS.map((s) => (
+                <div key={s.label} className="bg-zinc-950 px-4 py-4">
+                  <p className="text-zinc-300 text-xs font-medium">{s.label}</p>
+                  <p className="text-zinc-600 text-xs mt-0.5">{s.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
-    </main>
+        </section>
+
+        {/* ── Footer ── */}
+        <footer className="border-t border-zinc-900 py-5">
+          <div className="container">
+            <p className="text-zinc-700 text-xs text-center">
+              Analysis covers photographic composition only — not attractiveness or personal qualities.
+            </p>
+          </div>
+        </footer>
+      </main>
+    </>
   );
 }
