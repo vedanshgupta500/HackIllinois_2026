@@ -202,6 +202,7 @@ export default function HomePage() {
     return (
       <FaceLabelStep
         faces={faces}
+        preview={preview}
         onConfirm={handleNamesConfirmed}
         onBack={() => {
           setStep("upload");

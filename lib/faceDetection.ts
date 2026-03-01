@@ -1,21 +1,23 @@
 "use client";
 
+import * as faceapi from 'face-api.js';
 import type { Face, BBox } from "@/types/analysis";
 
-/**
- * Lightweight client-side face detection using skin-tone heuristics
- * and edge analysis. Returns bounding boxes + cropped face images.
- *
- * For a hackathon demo this is sufficient — production would use
- * MediaPipe Face Detection or a similar WASM model.
- */
+// Cache the model loading state
+let modelLoaded = false;
 
-function isSkinTone(r: number, g: number, b: number): boolean {
-  // YCbCr-based skin detection
-  const y = 0.299 * r + 0.587 * g + 0.114 * b;
-  const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-  const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-  return y > 80 && cb > 85 && cb < 135 && cr > 135 && cr < 180;
+async function loadModels(): Promise<void> {
+  if (modelLoaded) return;
+  
+  try {
+    console.log('[FaceAPI] Loading TinyFaceDetector model...');
+    await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+    modelLoaded = true;
+    console.log('[FaceAPI] Model loaded successfully');
+  } catch (error) {
+    console.error('[FaceAPI] Failed to load model:', error);
+    throw error;
+  }
 }
 
 interface SkinRegion {
@@ -63,7 +65,7 @@ function findSkinRegions(
     Array(cols).fill(false)
   );
   const regions: SkinRegion[] = [];
-  const THRESHOLD = 0.25;
+  const THRESHOLD = 0.15; // Lower threshold to detect more faces
 
   for (let gy = 0; gy < rows; gy++) {
     for (let gx = 0; gx < cols; gx++) {
@@ -113,16 +115,16 @@ function findSkinRegions(
       const regionH = (maxY - minY + 1) * gridSize;
       const avgDensity = cellCount > 0 ? totalDensity / cellCount : 0;
 
-      // Face-like aspect ratio check: roughly square to 2:3
+      // Face-like aspect ratio check: more permissive
       const aspect = regionW / (regionH || 1);
-      const minArea = width * height * 0.005; // at least 0.5% of frame
+      const minArea = width * height * 0.002; // at least 0.2% of frame (smaller faces)
       const area = regionW * regionH;
 
       if (
         area >= minArea &&
-        aspect > 0.4 &&
-        aspect < 2.0 &&
-        avgDensity > 0.3
+        aspect > 0.3 &&
+        aspect < 2.5 &&
+        avgDensity > 0.2
       ) {
         regions.push({
           x: minX * gridSize,
@@ -162,54 +164,75 @@ function cropFace(
 }
 
 /**
- * Detect faces in an image element and return Face[] with crops.
- * Deterministic given the same image.
+ * Detect faces in an image using TensorFlow BlazeFace model
  */
 export async function detectFaces(imageSrc: string): Promise<Face[]> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const analysis = document.createElement("canvas");
-      analysis.width = img.width;
-      analysis.height = img.height;
-      const ctx = analysis.getContext("2d")!;
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, img.width, img.height);
-
-      const regions = findSkinRegions(imageData);
-
-      // Merge overlapping regions
-      const merged = mergeOverlapping(regions);
-
-      // Limit to 6 faces max
-      const topRegions = merged.slice(0, 6);
-
-      if (topRegions.length === 0) {
+    img.onload = async () => {
+      try {
+        // Load the BlazeFace model
+        const model = await loadModel();
+        
+        // Run face detection
+        console.log('[BlazeFace] Running face detection...');
+        const predictions = await model.estimateFaces(img, false);
+        console.log(`[BlazeFace] Detected ${predictions.length} faces`);
+        
+        if (predictions.length === 0) {
+          resolve([]);
+          return;
+        }
+        
+        // Convert BlazeFace predictions to our Face format
+        const cropCanvas = document.createElement("canvas");
+        const faces: Face[] = predictions.map((prediction, i) => {
+          // BlazeFace returns: topLeft, bottomRight, landmarks, probability
+          const start = prediction.topLeft as [number, number];
+          const end = prediction.bottomRight as [number, number];
+          
+          const bbox: BBox = {
+            x: start[0],
+            y: start[1],
+            w: end[0] - start[0],
+            h: end[1] - start[1],
+          };
+          
+          const cropUrl = cropFace(cropCanvas, img, bbox);
+          
+          return {
+            id: `face_${i}`,
+            bbox,
+            cropUrl,
+            confidence: Array.isArray(prediction.probability) 
+              ? prediction.probability[0] 
+              : prediction.probability,
+          };
+        });
+        
+        // Sort faces left-to-right
+        faces.sort((a, b) => a.bbox.x - b.bbox.x);
+        // Re-number IDs after sorting
+        faces.forEach((f, i) => (f.id = `face_${i}`));
+        
+        console.log(`[detectFaces] Detected ${faces.length} faces:`, faces.map(f => ({
+          id: f.id,
+          position: `(${Math.round(f.bbox.x)}, ${Math.round(f.bbox.y)})`,
+          size: `${Math.round(f.bbox.w)}x${Math.round(f.bbox.h)}`,
+          confidence: f.confidence.toFixed(2)
+        })));
+        
+        resolve(faces);
+      } catch (error) {
+        console.error('[BlazeFace] Error detecting faces:', error);
         resolve([]);
-        return;
       }
-
-      const cropCanvas = document.createElement("canvas");
-      const faces: Face[] = topRegions.map((r, i) => {
-        const bbox: BBox = { x: r.x, y: r.y, w: r.w, h: r.h };
-        const cropUrl = cropFace(cropCanvas, img, bbox);
-        return {
-          id: `face_${i}`,
-          bbox,
-          cropUrl,
-          confidence: Math.min(0.99, 0.6 + r.density * 0.4),
-        };
-      });
-
-      // Sort faces left-to-right
-      faces.sort((a, b) => a.bbox.x - b.bbox.x);
-      // Re-number IDs
-      faces.forEach((f, i) => (f.id = `face_${i}`));
-
-      resolve(faces);
     };
-    img.onerror = () => resolve([]);
+    img.onerror = () => {
+      console.error('[BlazeFace] Error loading image');
+      resolve([]);
+    };
     img.src = imageSrc;
   });
 }
