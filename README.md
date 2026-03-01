@@ -145,6 +145,85 @@ Check out the live application: **[hack-illinois-2026.vercel.app](https://hack-i
 └── types/                 # TypeScript type definitions
 ```
 
+## 📖 Project Story
+
+### Inspiration
+
+The idea for Visual Dominance Analyzer came from a simple observation: **How do we quantify the often-intangible concept of "commanding a room"?** In group photos, videos, and team settings, some individuals naturally draw more visual attention than others. We wanted to build an intelligent system that could decode this phenomenon using computer vision and AI.
+
+We were inspired by:
+- The role of body language in communication and leadership
+- How spatial positioning affects perceived authority and presence
+- The intersection of psychology and computer vision
+- The democratization of AI through browser-based ML models
+
+### What We Built
+
+A full-stack AI application that combines multiple machine learning models in a novel way:
+
+1. **Multi-Signal Analysis Engine**: Rather than relying on a single metric, we engineered four independent signals that feed into a dominance score:
+   - **Spatial Presence** ($\text{score} = \frac{\text{face\_area}}{\text{total\_image\_area}} \times 100$)
+   - **Posture** (body orientation from pose detection)
+   - **Facial Intensity** (gaze direction and expression confidence)
+   - **Attention Capture** (compositional positioning using rule-of-thirds analysis)
+
+2. **Real-Time Face Detection**: Integrated TensorFlow.js with face-api.js for instant face detection and labeling directly in the browser
+
+3. **Pose Analysis**: Used BodyPix to extract body landmarks and analyze posture metrics
+
+4. **AI-Powered Explanations**: Leveraged Claude AI to generate contextual, natural language explanations of the analysis results
+
+5. **Voice Consultation UI**: Built an interactive voice agent powered by ElevenLabs that allows users to have conversations about their analysis results
+
+### How We Built It
+
+**Tech Stack Decisions:**
+- **Next.js 14**: Full-stack capabilities with API routes for backend logic
+- **Client-Side ML**: Chose browser-based models (TensorFlow.js) for instant processing without server latency
+- **Real-Time Voice**: Integrated ElevenLabs Conversational AI for natural voice interactions
+- **Image Processing**: Used Canvas API for pixel-level analysis and html2canvas for result sharing
+- **Responsive UI**: Tailwind CSS with Recharts for beautiful data visualization
+
+**Architecture Highlights:**
+- Modular component structure separating concerns (upload, processing, results, voice)
+- Custom hooks for state management (useImageUpload, useTensorFlow, useAnalysis)
+- Server-side Claude integration with streaming support
+- Session-aware voice agent context injection with automatic retry/fallback mechanisms
+
+### Key Challenges & Solutions
+
+**Challenge 1: Model Loading Performance**
+- *Problem*: Loading multiple large ML models (face-api.js ~4MB, BodyPix ~4MB) caused initial delays
+- *Solution*: Implemented lazy loading with progress tracking, moved models to CDN, cached loaded weights in localStorage
+
+**Challenge 2: Browser Resource Constraints**
+- *Problem*: Running heavy TensorFlow.js computations froze the UI
+- *Solution*: Used Web Workers for off-thread processing, added async processing screens with visual feedback
+
+**Challenge 3: Coordinating Multiple ML Models**
+- *Problem*: Face detection, body detection, and AI analysis needed to complete in sequence while handling failure cases
+- *Solution*: Built a robust orchestration pipeline with fallback mechanisms; if BodyPix fails, we continue with facial analysis alone
+
+**Challenge 4: Voice Agent Context Injection**
+- *Problem*: ElevenLabs sessions weren't immediately available after initialization, causing silent context failures
+- *Solution*: Implemented session-aware context detection with retry logic, 4-endpoint fallback mechanism, and guaranteed fallback message prepending
+
+**Challenge 5: Cross-Platform Compatibility**
+- *Problem*: Webcam capture and model inference behaved differently across browsers
+- *Solution*: Extensive browser testing, graceful degradation for unsupported features, device-specific optimizations
+
+### What We Learned
+
+1. **ML Model Integration**: Discovered the power of combining specialized models (face detection, pose, attention) rather than relying on a single general-purpose model
+2. **Real-Time Performance**: Learned critical optimization techniques for browser-based ML: model quantization, batching, and strategic caching
+3. **Voice AI Complexity**: Building conversational AI required careful state management and understanding of session lifecycles
+4. **Production-Ready ML**: Edge cases in model inference (blurry images, hard angles, multiple people) required extensive post-processing and user feedback mechanisms
+5. **Ethical Considerations**: Developed a deep appreciation for responsible AI—understanding that "dominance" detection could have biases
+
+### Impact
+
+The project successfully demonstrates that complex, multi-model AI analysis can run entirely in the browser, making sophisticated computer vision accessible without deep technical knowledge. The voice agent component adds a conversational layer, transforming raw analysis into insights.
+
 ## 🎓 Built At HackIllinois 2026
 
 This project was created during the HackIllinois hackathon in February 2026.
