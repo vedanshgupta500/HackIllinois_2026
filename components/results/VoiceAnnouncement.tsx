@@ -14,6 +14,7 @@ interface VoiceAnnouncementProps {
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 type AgentMode = "listening" | "speaking" | "idle";
+type ContextStatus = "idle" | "injecting" | "ready" | "failed";
 
 interface TranscriptLine {
   role: "agent" | "user";
@@ -21,19 +22,24 @@ interface TranscriptLine {
 }
 
 const AGENT_ID = "agent_4801kjkx410df49vbbajszxbb0c4";
-const CONTEXT_HINT =
-  "You will receive a context block named ANALYSIS_CONTEXT. Use it to reference each person's scores and ranking.";
+const STARTER_USER_PROMPT =
+  "Summarize each person by name, rank, total score, and all four signal scores before answering follow-up questions.";
 
 export function VoiceAnnouncement({ winnerName, winnerScore, explanation, analysisResults }: VoiceAnnouncementProps) {
   const conversationRef = useRef<Conversation | null>(null);
   const isStartingRef = useRef(false);
   const manualEndRef = useRef(false);
   const injectedContextKeysRef = useRef<Set<string>>(new Set());
+  const attemptedInjectionKeysRef = useRef<Set<string>>(new Set());
+  const promptedSessionKeysRef = useRef<Set<string>>(new Set());
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [mode, setMode] = useState<AgentMode>("idle");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [contextWarning, setContextWarning] = useState<string | null>(null);
+  const [contextStatus, setContextStatus] = useState<ContextStatus>("idle");
+  const [contextMessage, setContextMessage] = useState<string | null>(null);
+  const [contextRetryCount, setContextRetryCount] = useState(0);
+  const [fallbackModeActive, setFallbackModeActive] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
 
   const contextText = buildAgentContextFromResults(analysisResults);
@@ -93,11 +99,54 @@ export function VoiceAnnouncement({ winnerName, winnerScore, explanation, analys
     setConversationId(null);
     setStatus("disconnected");
     setMode("idle");
+    setContextStatus("idle");
+    setContextMessage(null);
     if (manual) {
       setError(null);
     }
     manualEndRef.current = false;
   }, []);
+
+  const sendUserMessageWithFallback = useCallback(
+    (message: string) => {
+      const conversation = conversationRef.current;
+      if (!conversation) {
+        throw new Error("No active conversation to send message");
+      }
+
+      const shouldPrependFallback = contextStatus !== "ready";
+      const payload = shouldPrependFallback
+        ? `ANALYSIS CONTEXT:\n${contextText}\n\nUSER QUESTION:\n${message}`
+        : message;
+
+      conversation.sendUserMessage(payload);
+      addTranscript("user", message);
+    },
+    [contextStatus, contextText]
+  );
+
+  const sendStarterPrompt = useCallback(() => {
+    if (status !== "connected" || !conversationRef.current || !conversationId) return;
+
+    const promptKey = `${conversationId}::${contextKey}`;
+    if (promptedSessionKeysRef.current.has(promptKey)) return;
+
+    try {
+      sendUserMessageWithFallback(STARTER_USER_PROMPT);
+      promptedSessionKeysRef.current.add(promptKey);
+      if (contextStatus !== "ready") {
+        setFallbackModeActive(true);
+        if (!contextMessage) {
+          setContextMessage("Session context API unavailable; using safe prepend fallback.");
+        }
+      }
+    } catch (sendError) {
+      const details = sendError instanceof Error ? sendError.message : "Unknown send error";
+      console.error("[VoiceAgent] Failed to send starter prompt", details);
+      setError(`Voice context unavailable: injection and fallback failed (${details})`);
+      setContextMessage("Voice context unavailable");
+    }
+  }, [contextKey, contextMessage, contextStatus, conversationId, sendUserMessageWithFallback, status]);
 
   const askExpert = async () => {
     if (isStartingRef.current) return;
@@ -108,7 +157,8 @@ export function VoiceAnnouncement({ winnerName, winnerScore, explanation, analys
     }
 
     setError(null);
-    setContextWarning(null);
+    setContextMessage(null);
+    setContextStatus("idle");
     setTranscript([]);
 
     try {
@@ -264,10 +314,10 @@ export function VoiceAnnouncement({ winnerName, winnerScore, explanation, analys
       }
 
       if (conversation) {
-        addTranscript(
-          "user",
-          `${CONTEXT_HINT}\n\n${contextText}\n\nReview this analysis result: ${winnerName} won with a score of ${winnerScore.toFixed(1)}. Summary: ${explanation}`
-        );
+        const derivedId = conversation.getId?.() || null;
+        if (derivedId) {
+          setConversationId(derivedId);
+        }
         conversationRef.current = conversation;
         console.log("[VoiceAgent] Conversation started, awaiting agent response");
       } else {
@@ -294,59 +344,116 @@ export function VoiceAnnouncement({ winnerName, winnerScore, explanation, analys
     if (status !== "connected" || !conversationId) return;
 
     const injectionKey = `${conversationId}::${contextKey}`;
-    if (injectedContextKeysRef.current.has(injectionKey)) return;
+    if (injectedContextKeysRef.current.has(injectionKey)) {
+      setContextStatus("ready");
+      setContextMessage("Voice context ready");
+      return;
+    }
 
-    injectedContextKeysRef.current.add(injectionKey);
+    if (attemptedInjectionKeysRef.current.has(injectionKey)) return;
+    attemptedInjectionKeysRef.current.add(injectionKey);
+    setContextStatus("injecting");
+    setContextMessage("Injecting analysis context...");
 
     const inject = async () => {
       try {
-        const response = await fetch("/api/elevenlabs/context", {
+        const response = await fetch("/api/agent/context", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId: conversationId,
-            results: analysisResults,
+            contextText,
           }),
         });
 
         if (!response.ok) {
           const details = await response.text();
-          console.warn("[VoiceAgent] Voice context unavailable", {
+          console.warn("[VoiceAgent] Context injection failed", {
             conversationId,
             status: response.status,
             details,
           });
-          setContextWarning("Voice context unavailable");
+          setContextStatus("failed");
+          setFallbackModeActive(true);
+          setContextMessage("Context injection failed. Using safe prepend fallback.");
+          sendStarterPrompt();
           return;
         }
 
-        const payload = await response.json();
+        const payload = (await response.json()) as { ok?: boolean };
+        if (!payload.ok) {
+          setContextStatus("failed");
+          setFallbackModeActive(true);
+          setContextMessage("Context injection failed. Using safe prepend fallback.");
+          sendStarterPrompt();
+          return;
+        }
+
         console.log("[VoiceAgent] Context injected successfully", payload);
-        setContextWarning(null);
+        injectedContextKeysRef.current.add(injectionKey);
+        setContextStatus("ready");
+        setContextMessage("Voice context ready");
+        try {
+          conversationRef.current?.sendContextualUpdate(contextText);
+        } catch {
+          // no-op
+        }
+        sendStarterPrompt();
       } catch (injectError) {
-        console.warn("[VoiceAgent] Voice context unavailable", injectError);
-        setContextWarning("Voice context unavailable");
+        console.warn("[VoiceAgent] Context injection error", injectError);
+        setContextStatus("failed");
+        setFallbackModeActive(true);
+        setContextMessage("Context injection failed. Using safe prepend fallback.");
+        sendStarterPrompt();
       }
     };
 
     void inject();
-  }, [analysisResults, contextKey, conversationId, status]);
+  }, [contextKey, contextRetryCount, contextText, conversationId, sendStarterPrompt, status]);
+
+  useEffect(() => {
+    if (status !== "connected") return;
+    if (!conversationId) return;
+    if (contextStatus !== "ready" && contextStatus !== "failed") return;
+    sendStarterPrompt();
+  }, [contextStatus, conversationId, sendStarterPrompt, status]);
+
+  const retryContextInjection = () => {
+    if (!conversationId) {
+      setContextMessage("No active session id. Fallback prepend mode remains active.");
+      return;
+    }
+    const injectionKey = `${conversationId}::${contextKey}`;
+    attemptedInjectionKeysRef.current.delete(injectionKey);
+    setFallbackModeActive(false);
+    setContextStatus("idle");
+    setContextMessage("Retrying context injection...");
+    setContextRetryCount((prev) => prev + 1);
+  };
+
+  const effectiveContextReady = contextStatus === "ready" || fallbackModeActive;
+  const canPressPrimary = status === "disconnected" || status === "connected" ? true : effectiveContextReady;
 
   return (
     <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 backdrop-blur-xl shadow-[0_20px_56px_-28px_rgba(0,0,0,0.9)] p-5 sm:p-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-zinc-400 text-xs font-medium uppercase tracking-widest">ElevenLabs · Clavicular Voice Agent</p>
-          <p className="text-zinc-200 text-sm mt-1">
-            Status: <span className="font-medium text-violet-300">{status}</span>
-            {status === "connected" ? ` · ${mode}` : ""}
-          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className={`text-[11px] px-2 py-1 rounded-full border ${status === "connected" ? "text-emerald-200 border-emerald-500/30 bg-emerald-500/10" : "text-zinc-300 border-zinc-700 bg-zinc-900/70"}`}>
+              {status === "connected" ? "Connected" : "Disconnected"}
+            </span>
+            <span className={`text-[11px] px-2 py-1 rounded-full border ${effectiveContextReady ? "text-violet-200 border-violet-500/30 bg-violet-500/10" : "text-amber-200 border-amber-500/30 bg-amber-500/10"}`}>
+              {effectiveContextReady ? "Context Ready" : "Context Not Ready"}
+            </span>
+            {status === "connected" && <span className="text-[11px] px-2 py-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-200">{mode}</span>}
+          </div>
         </div>
 
         <button
           type="button"
           onClick={askExpert}
-          disabled={status === "connecting"}
+          disabled={status === "connecting" || !canPressPrimary}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-violet-800 text-white text-sm font-semibold transition-colors"
         >
           {status === "connected" ? <PhoneOff size={16} /> : <Mic size={16} />}
@@ -358,8 +465,19 @@ export function VoiceAnnouncement({ winnerName, winnerScore, explanation, analys
         <p className="text-xs text-red-400 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">{error}</p>
       )}
 
-      {!error && contextWarning && (
-        <p className="text-xs text-amber-300 bg-amber-950/30 border border-amber-900/40 rounded-lg px-3 py-2">{contextWarning}</p>
+      {!error && contextMessage && (
+        <div className="flex items-center justify-between gap-2 text-xs text-zinc-200 bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+          <span>{contextMessage}</span>
+          {status === "connected" && contextStatus === "failed" && (
+            <button
+              type="button"
+              onClick={retryContextInjection}
+              className="shrink-0 px-2 py-1 rounded-md border border-violet-500/30 text-violet-200 hover:bg-violet-500/10"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 max-h-44 overflow-y-auto space-y-2">

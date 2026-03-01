@@ -179,6 +179,7 @@ export function ResultsView({
       scores: person.scores,
     })),
     winnerFaceId: winner?.faceId || "",
+    isTie: Boolean(isTie),
     processingTime,
     explanation,
   };
