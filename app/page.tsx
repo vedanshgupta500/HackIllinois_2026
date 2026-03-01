@@ -255,13 +255,14 @@ export default function HomePage() {
 
       <main className="min-h-[calc(100vh-56px)] flex flex-col relative overflow-hidden">
         {/* Background image - ASU frat leader with fade animation */}
-        <div className="absolute inset-0 z-0 animate-background-fade">
+        {/* TODO: Add image URL when provided */}
+        {/* <div className="absolute inset-0 z-0 animate-background-fade">
           <img 
-            src="https://i.imgur.com/YourImageURL.jpg" 
+            src="/your-image.jpg" 
             alt="Background" 
             className="w-full h-full object-cover"
           />
-        </div>
+        </div> */}
         
         {/* Animated background gradients */}
         <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl animate-pulse-slow" />
@@ -282,7 +283,7 @@ export default function HomePage() {
 
             {/* Headline */}
             <div className="text-center space-y-3">
-              <h1 className="text-zinc-50 text-gradient animate-float text-6xl font-bold">
+              <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-zinc-50 text-gradient animate-float leading-tight">
                 Mog.GPT
               </h1>
               <p className="text-zinc-400 text-base max-w-sm mx-auto leading-relaxed">
