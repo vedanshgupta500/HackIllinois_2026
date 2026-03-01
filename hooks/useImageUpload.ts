@@ -56,6 +56,13 @@ export function useImageUpload() {
     [validateAndSet]
   );
 
+  const onImageFile = useCallback(
+    (selected: File) => {
+      validateAndSet(selected);
+    },
+    [validateAndSet]
+  );
+
   const clear = useCallback(() => {
     if (preview) URL.revokeObjectURL(preview);
     setFile(null);
@@ -75,6 +82,7 @@ export function useImageUpload() {
     onDragOver,
     onDragLeave,
     onInputChange,
+    onImageFile,
     clear,
   };
 }

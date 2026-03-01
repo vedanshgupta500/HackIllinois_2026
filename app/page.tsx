@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { DropZone } from "@/components/upload/DropZone";
+import ImageSourceToggle from "@/components/ImageSourceToggle";
 import { LoadingOverlay } from "@/components/processing/LoadingOverlay";
 import { FaceLabelStep } from "@/components/steps/FaceLabelStep";
 import { ResultsView } from "@/components/results/ResultsView";
@@ -321,7 +322,10 @@ export default function HomePage() {
 
             {/* Upload area */}
             <div className="w-full">
-              <DropZone preview={preview} error={uploadError} clear={clearUpload} {...uploadProps} />
+              <ImageSourceToggle
+                uploadUI={<DropZone preview={preview} error={uploadError} clear={clearUpload} {...uploadProps} />}
+                onImageFile={uploadProps.onImageFile}
+              />
             </div>
 
             {/* Primary CTA */}
